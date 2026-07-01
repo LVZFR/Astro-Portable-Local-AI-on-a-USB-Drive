@@ -8,3 +8,5 @@ bin/llamafile.exe
 # OS cruft
 .DS_Store
 Thumbs.db
+._*
+.DS_Store
