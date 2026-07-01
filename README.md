@@ -1,6 +1,9 @@
 [README.md](https://github.com/user-attachments/files/29534911/README.md)
 # Astro: Portable Local AI on a USB Drive
 
+<img width="586" height="188" alt="image" src="https://github.com/user-attachments/assets/3cb6a695-b54b-4d8d-ac16-4c8344cfbb85" />
+
+
 A cross-platform, offline-first LLM setup that runs entirely from a USB drive —
 no install, no internet connection, no cloud dependency. Plug it into a
 Windows, macOS, or Linux machine and get a local ChatGPT-style interface
