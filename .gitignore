@@ -1,0 +1,10 @@
+# Model weights - too large for git, fetched via download-models.sh
+models/*.gguf
+
+# Runtime binaries - downloaded separately, see README setup steps
+bin/llamafile
+bin/llamafile.exe
+
+# OS cruft
+.DS_Store
+Thumbs.db
