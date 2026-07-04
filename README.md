@@ -1,8 +1,5 @@
 # Astro: Portable Local AI on a USB Drive
 
-<img width="584" height="185" alt="image" src="https://github.com/user-attachments/assets/b9d3161e-50cd-4ead-ab0a-59aaa6e3bbce" />
-
-
 A cross-platform, offline-first LLM setup that runs entirely from a USB drive —
 no install, no internet connection, no cloud dependency. Plug it into a
 Windows, macOS, or Linux machine and get a local ChatGPT-style interface
@@ -22,7 +19,7 @@ drive itself.
 
 ## How it works
 
-- **Runtime: [llamafile](https://github.com/Mozilla-Ocho/llamafile)** — a
+- **Runtime: [llamafile](https://github.com/mozilla-ai/llamafile)** — a
   single, self-contained executable (built on the Cosmopolitan libc project)
   that runs natively on Windows, macOS, and Linux without installation. It
   bundles an inference engine (llama.cpp) and a local web server with a
@@ -68,7 +65,7 @@ no abliterated or uncensored variants are used in this build.
    three model tiers; 32 GB is enough for the Fast + Daily Driver tiers).
 2. **Clone this repo onto the drive.**
 3. **Download the llamafile runtime** from the
-   [releases page](https://github.com/Mozilla-Ocho/llamafile/releases) and
+   [releases page](https://github.com/mozilla-ai/llamafile/releases) and
    place it at `bin/llamafile` (Linux/macOS) — copy the same file to
    `bin/llamafile.exe` for Windows.
 4. **Fetch model weights:**
@@ -93,6 +90,45 @@ Pass a model path as an argument to skip the interactive picker, e.g.:
 ./run.sh models/qwen2.5-7b-instruct.Q4_K_M.gguf
 ```
 
+## Usage
+
+Once set up (runtime in `bin/`, at least one model in `models/`), running it
+is the same on every launch:
+
+**macOS / Linux**
+```bash
+cd /path/to/ASTRO      # e.g. /Volumes/ASTRO/ASTRO on macOS
+./run.sh
+```
+
+**Windows**
+```cmd
+cd X:\ASTRO            # whatever drive letter the USB mounts as
+run.bat
+```
+
+Then:
+1. Pick a model from the numbered menu.
+2. Wait for it to finish loading (the terminal stops scrolling and sits idle).
+3. Open `http://127.0.0.1:8080` in any browser for the chat UI — or just
+   type directly in the terminal, which is also an interactive chat.
+
+Keep the terminal window open while using the web UI — closing it (or
+`Ctrl+C`) stops the server. To skip the menu and load a specific model
+directly, pass its path as an argument:
+```bash
+./run.sh models/qwen2.5-7b-instruct.Q4_K_M.gguf
+```
+
+Every session is fresh and stateless — the model retains nothing between
+launches.
+
+## Keeping the runtime up to date
+
+The pinned llamafile version lives in [`.llamafile-version`](./.llamafile-version),
+and a scheduled GitHub Actions workflow opens an issue whenever upstream ships
+a newer release. See [UPDATING.md](./UPDATING.md) for the full update process.
+
 ## Design notes / tradeoffs
 
 - **Drive speed matters more than capacity.** Model loading is I/O bound —
@@ -113,9 +149,52 @@ Pass a model path as an argument to skip the interactive picker, e.g.:
   instruct models, since the repo is public and intended as a portfolio /
   learning artifact.
 
+## Troubleshooting
+
+**`./download-models.sh` fails with `line 15: llama: unbound variable`**
+This happens on macOS, which ships bash 3.2 (2007) by default rather than
+bash 4+, for licensing reasons. Bash 3.2 doesn't support associative arrays
+(`declare -A`), which the script originally used. Fixed in this repo by
+rewriting the model list as plain named variables instead of an associative
+array — no action needed if you're using the current version of the script,
+but worth knowing if you ever see this class of error with other scripts on
+macOS.
+
+**`run.sh` fails or behaves oddly with array-related errors**
+Same root cause as above — `mapfile`/`readarray` are bash 4+ only. Fixed by
+building the model list with a `while read` loop instead.
+
+**Drive shows a nested folder, e.g. `/Volumes/ASTRO/ASTRO/...`**
+If you drag the whole `ASTRO` project folder onto a drive you've also
+labeled `ASTRO`, you end up with drive-name/folder-name nesting. Not a bug —
+just `cd` into the inner folder. Run `ls -la` at the drive root if you're
+ever unsure of the actual path before running scripts.
+
+**macOS blocks the binary with "cannot be opened, unidentified developer"**
+Clear the quarantine flag once after copying the binary onto the drive:
+```bash
+xattr -d com.apple.quarantine bin/llamafile
+```
+`run.sh` also does this automatically on every launch, so it's normally a
+non-issue — only relevant if you're running the binary manually outside the
+launcher.
+
+**Web UI shows `ERR_CONNECTION_REFUSED` at `127.0.0.1:8080`**
+The server isn't running. `run.sh`/`run.bat` need to stay open in their
+terminal window the whole time you're using the web UI — closing that
+terminal (or `Ctrl+C`) kills the server. Relaunch and leave the terminal
+open in the background.
+
+**No memory between sessions**
+By design. Each launch is a fresh, stateless instance — the model doesn't
+retain names, facts, or prior conversation across restarts. Persistent
+memory would require an additional RAG/vector-store layer, which is out of
+scope for this build.
+
 ## Tested on
 
-- Intel MacBook Pro 2020 (T2 chip), macOS
+- Intel MacBook Pro 2020 (T2 chip, i9-9880H), macOS — Llama 3.2 3B Q4_K_M
+  confirmed working via both CLI chat and web UI, ~10.7 tokens/sec
 - *(add other machines as tested)*
 
 ## License
