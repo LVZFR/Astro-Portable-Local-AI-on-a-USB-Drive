@@ -1,0 +1,88 @@
+name: Check llamafile updates
+
+# Checks the upstream mozilla-ai/llamafile repo for a newer release than the
+# version pinned in .llamafile-version. If one exists, opens an issue in this
+# repo (and optionally sends a Telegram notification). Runs weekly, or on
+# demand via the "Run workflow" button.
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'   # every Monday, 08:00 UTC
+  workflow_dispatch:       # manual trigger from the Actions tab
+
+permissions:
+  contents: read
+  issues: write            # required to open an issue
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      # These are optional. Set them under Settings > Secrets and variables >
+      # Actions if you want a Telegram ping via your bot. If unset, the
+      # Telegram step is skipped and you just get a GitHub issue.
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Get latest upstream release
+        id: upstream
+        run: |
+          LATEST=$(curl -fsSL \
+            https://api.github.com/repos/mozilla-ai/llamafile/releases/latest \
+            | jq -r '.tag_name')
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "Upstream latest release: $LATEST"
+
+      - name: Read pinned version
+        id: pinned
+        run: |
+          if [ -f .llamafile-version ]; then
+            PINNED=$(tr -d '[:space:]' < .llamafile-version)
+          else
+            PINNED="none"
+          fi
+          echo "pinned=$PINNED" >> "$GITHUB_OUTPUT"
+          echo "Pinned version in repo: $PINNED"
+
+      - name: Open issue if a newer version exists
+        if: steps.upstream.outputs.latest != steps.pinned.outputs.pinned
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE="New llamafile release available: ${{ steps.upstream.outputs.latest }}"
+
+          # Don't open a duplicate if an issue for this version is already open
+          EXISTING=$(gh issue list --repo "${{ github.repository }}" \
+            --state open --search "$TITLE in:title" --json number --jq 'length')
+          if [ "$EXISTING" -gt 0 ]; then
+            echo "An issue for this version already exists. Nothing to do."
+            exit 0
+          fi
+
+          gh issue create \
+            --repo "${{ github.repository }}" \
+            --title "$TITLE" \
+            --body "Upstream **mozilla-ai/llamafile** has published \`${{ steps.upstream.outputs.latest }}\`.
+
+          This repo is currently pinned to \`${{ steps.pinned.outputs.pinned }}\`.
+
+          **To update:**
+          1. Download the new \`llamafile\` binary from the [latest release](https://github.com/mozilla-ai/llamafile/releases/latest).
+          2. Replace \`bin/llamafile\` on the drive, then copy it to \`bin/llamafile.exe\` for Windows.
+          3. Bump \`.llamafile-version\` to \`${{ steps.upstream.outputs.latest }}\` and commit.
+          4. Re-run \`./run.sh\` to confirm it still launches (check for any changed CLI flags in the release notes).
+
+          _Filed automatically by the \`check-llamafile-update\` workflow._"
+
+      - name: Notify Telegram (optional)
+        if: steps.upstream.outputs.latest != steps.pinned.outputs.pinned && env.TELEGRAM_BOT_TOKEN != '' && env.TELEGRAM_CHAT_ID != ''
+        run: |
+          MSG="New llamafile release ${{ steps.upstream.outputs.latest }} available (Astro is pinned to ${{ steps.pinned.outputs.pinned }}). An issue has been opened in the Astro repo."
+          curl -fsS -X POST \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            --data-urlencode text="$MSG" >/dev/null
+          echo "Telegram notification sent."
